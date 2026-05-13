@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>八字命理 · AI 解读</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#08090f;--bg2:#0d0e1c;--bg3:#11122080;--bg4:#13152a;
+  --border:#1c1e35;--border2:#252844;
+  --gold:#d4a84b;--gold2:#f0c870;--gold-dim:rgba(212,168,75,.18);
+  --text:#ddd8cc;--text2:#7880a0;--text3:#444866;
+  --wood:#4daf48;--fire:#e04848;--earth:#c87c28;--metal:#8898b8;--water:#3878d8;
+  --bj:#c89838;--jc:#a07028;--ss:#48a848;--sg:#68c068;
+  --pc:#c87828;--zc:#e0a020;--qi:#c83030;--zg:#d85050;
+  --py:#3068c8;--zy:#4890e0;
+}
+body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── SIDEBAR ── */
+#sidebar{width:200px;min-width:200px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh}
+.sb-head{padding:16px 14px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+.sb-head .icon{font-size:16px;opacity:.7}
+.sb-head h2{font-size:13px;color:var(--gold);letter-spacing:2px}
+#new-btn{margin:10px;padding:8px;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#0a0a14;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;letter-spacing:.5px}
+#new-btn:hover{filter:brightness(1.12)}
+#task-list{flex:1;overflow-y:auto;padding:6px}
+.task-item{padding:9px 10px;border-radius:6px;cursor:pointer;margin-bottom:3px;border:1px solid transparent;transition:all .15s}
+.task-item:hover{background:rgba(255,255,255,.04)}
+.task-item.active{background:var(--bg4);border-color:rgba(212,168,75,.25)}
+.ti-name{font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ti-time{font-size:11px;color:var(--text2);margin-top:2px}
+
+/* ── LEFT PANEL ── */
+#panel-left{width:400px;min-width:400px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* Input form */
+#input-form{padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.form-row{display:flex;gap:8px;flex-wrap:wrap}
+.form-row+.form-row{margin-top:8px}
+.fg{flex:1;min-width:100px}
+.fg label{font-size:10px;color:var(--text2);display:block;margin-bottom:3px;letter-spacing:.5px}
+.fg input,.fg select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 8px;color:var(--text);font-size:12px}
+.fg input:focus,.fg select:focus{outline:none;border-color:rgba(212,168,75,.45)}
+#paipan-btn{padding:7px 18px;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#080810;border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:700;letter-spacing:1px;white-space:nowrap;align-self:flex-end}
+#paipan-btn:hover{filter:brightness(1.1)}
+#paipan-btn:disabled{background:#1e2030;color:#444;cursor:not-allowed;filter:none}
+
+/* Empty state left */
+#left-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text3)}
+#left-empty .ei{font-size:36px;opacity:.25}
+#left-empty p{font-size:12px}
+
+/* 命盘 container */
+#mingpan{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:0}
+
+/* 命盘 header */
+.mp-header{padding:12px 16px 8px;border-bottom:1px solid var(--border)}
+.mp-title{font-size:13px;color:var(--gold);letter-spacing:1px;margin-bottom:2px}
+.mp-meta{font-size:11px;color:var(--text2)}
+
+/* 四柱 grid */
+.sizhu-wrap{padding:14px 12px 10px;border-bottom:1px solid var(--border)}
+.sizhu-label{font-size:10px;color:var(--text3);letter-spacing:1px;margin-bottom:10px;text-align:center}
+.sizhu-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.pillar{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
+.pillar.dm{border-color:rgba(212,168,75,.4);background:rgba(212,168,75,.05)}
+.p-col-label{font-size:10px;color:var(--text3);letter-spacing:.5px}
+.p-sstian{font-size:10px;height:16px;display:flex;align-items:center;font-weight:600}
+.p-gan{font-size:36px;font-weight:700;line-height:1;margin:1px 0}
+.p-wxbadge{font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(255,255,255,.06);letter-spacing:.5px;height:15px;display:flex;align-items:center}
+.p-sep{width:80%;height:1px;background:var(--border);margin:3px 0}
+.p-canggan{display:flex;gap:2px;flex-wrap:wrap;justify-content:center;min-height:18px}
+.cg{font-size:11px;padding:1px 4px;border-radius:3px;background:rgba(255,255,255,.05)}
+.p-zhi{font-size:36px;font-weight:700;line-height:1;margin:1px 0}
+.p-ssdi{font-size:10px;height:16px;display:flex;align-items:center;font-weight:600}
+
+/* 五行 stats */
+.wx-wrap{padding:10px 16px;border-bottom:1px solid var(--border)}
+.wx-row{display:flex;gap:6px;align-items:center}
+.wx-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.wx-name{font-size:10px;font-weight:700}
+.wx-num{font-size:12px;font-weight:700;color:var(--text)}
+.wx-track{width:100%;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.wx-fill{height:100%;border-radius:2px;transition:width .4s}
+
+/* 大运 */
+.dy-wrap{padding:10px 12px 14px;flex:0 0 auto}
+.dy-head{font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:8px;padding-left:4px}
+.dy-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.dy-card{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 8px 6px;min-width:64px;text-align:center;flex-shrink:0;cursor:default;transition:border-color .15s}
+.dy-card:hover{border-color:rgba(212,168,75,.35)}
+.dy-gz{font-size:20px;font-weight:700;line-height:1;margin-bottom:4px}
+.dy-age{font-size:9px;color:var(--text2)}
+.dy-year{font-size:9px;color:var(--text3)}
+
+/* ── RIGHT PANEL ── */
+#panel-right{flex:1;display:flex;flex-direction:column;height:100vh;min-width:0}
+
+/* Topic tabs */
+#topic-bar{padding:10px 16px 0;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;background:var(--bg2)}
+.topic-btn{background:none;border:1px solid var(--border2);border-radius:5px 5px 0 0;padding:6px 14px;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;margin-bottom:-1px;position:relative}
+.topic-btn:hover{color:var(--text);border-color:var(--border2)}
+.topic-btn.active{color:var(--gold);border-color:var(--gold);border-bottom-color:var(--bg);background:var(--bg)}
+
+/* AI area */
+#ai-area{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px}
+#right-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text3)}
+#right-empty .ei{font-size:32px;opacity:.2}
+#right-empty p{font-size:12px}
+
+/* Messages */
+.msg{display:flex;flex-direction:column;gap:3px}
+.msg.user{align-items:flex-end}
+.msg.assistant{align-items:flex-start}
+.msg .rlabel{font-size:10px;color:var(--text3);padding:0 3px}
+.bubble{max-width:82%;padding:10px 14px;border-radius:10px;font-size:13.5px;line-height:1.9}
+.msg.user .bubble{background:rgba(212,168,75,.12);border:1px solid rgba(212,168,75,.25);border-radius:10px 10px 3px 10px}
+.msg.assistant .bubble{background:var(--bg4);border:1px solid var(--border);border-radius:3px 10px 10px 10px}
+/* Markdown */
+.bubble h1,.bubble h2{font-size:14px;color:var(--gold);margin:14px 0 6px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.bubble h3{font-size:13.5px;color:var(--gold2);margin:12px 0 5px}
+.bubble h4{font-size:13px;color:#90a0c0;margin:8px 0 4px}
+.bubble p{margin:5px 0}
+.bubble ul,.bubble ol{padding-left:16px;margin:5px 0}
+.bubble li{margin:3px 0}
+.bubble strong{color:#e8d4a8;font-weight:600}
+.bubble em{color:#90b8d8;font-style:normal}
+.bubble hr{border:none;border-top:1px solid var(--border);margin:10px 0}
+.bubble code{background:rgba(255,255,255,.07);padding:1px 5px;border-radius:3px;font-size:12px}
+.bubble blockquote{border-left:3px solid var(--gold-dim);padding-left:10px;color:var(--text2);margin:6px 0}
+
+/* Thinking */
+.thinking{display:flex;align-items:center;gap:8px;color:var(--text2);font-size:11px;padding:4px 0}
+.dots{display:flex;gap:3px}
+.dots span{width:5px;height:5px;background:var(--gold);border-radius:50%;animation:pulse 1.3s ease-in-out infinite}
+.dots span:nth-child(2){animation-delay:.2s}
+.dots span:nth-child(3){animation-delay:.4s}
+@keyframes pulse{0%,80%,100%{opacity:.15;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+
+/* Quick questions */
+#quick-qs{padding:8px 20px;display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;border-top:1px solid var(--border)}
+.qbtn{background:none;border:1px solid var(--border2);border-radius:20px;padding:5px 12px;color:var(--text2);font-size:11px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.qbtn:hover{border-color:rgba(212,168,75,.4);color:var(--gold)}
+
+/* Input box */
+#input-box{padding:10px 16px 14px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end;flex-shrink:0;background:var(--bg2)}
+#user-input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;resize:none;min-height:38px;max-height:120px;font-family:inherit;line-height:1.6}
+#user-input:focus{outline:none;border-color:rgba(212,168,75,.4)}
+#send-btn{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#080810;border:none;border-radius:6px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;letter-spacing:.5px}
+#send-btn:hover{filter:brightness(1.1)}
+#send-btn:disabled{background:#1e2030;color:#444;cursor:not-allowed;filter:none}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside id="sidebar">
+  <div class="sb-head">
+    <span class="icon">☯</span>
+    <h2>命理记录</h2>
+  </div>
+  <button id="new-btn" onclick="showNewForm()">＋ 新建排盘</button>
+  <div id="task-list"></div>
+</aside>
+
+<!-- Left: input + 命盘 -->
+<div id="panel-left">
+  <div id="input-form">
+    <div class="form-row">
+      <div class="fg"><label>出生日期（公历）</label><input type="date" id="birthDate" value="1993-11-06"></div>
+      <div class="fg"><label>出生时间（北京时间）</label><input type="time" id="birthTime" value="06:00"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>性别</label>
+        <select id="gender"><option value="male">男</option><option value="female">女</option></select>
+      </div>
+      <div class="fg"><label>出生地（选填）</label><input type="text" id="birthPlace" placeholder="城市 / 地区"></div>
+      <button id="paipan-btn" onclick="doPaiPan()">排 盘</button>
+    </div>
+  </div>
+
+  <div id="left-empty">
+    <div class="ei">☯</div>
+    <p>填写出生信息开始排盘</p>
+  </div>
+
+  <div id="mingpan" class="hidden">
+    <div class="mp-header">
+      <div class="mp-title" id="mp-title">— 八字命盘 —</div>
+      <div class="mp-meta" id="mp-meta"></div>
+    </div>
+    <div class="sizhu-wrap">
+      <div class="sizhu-label">四 柱 八 字</div>
+      <div class="sizhu-grid" id="sizhu-grid"></div>
+    </div>
+    <div class="wx-wrap" id="wuxing-bar"></div>
+    <div class="dy-wrap" id="dayun-area"></div>
+  </div>
+</div>
+
+<!-- Right: AI analysis -->
+<div id="panel-right">
+  <div id="topic-bar" class="hidden">
+    <button class="topic-btn active" data-topic="命格总论" onclick="switchTopic(this)">命格总论</button>
+    <button class="topic-btn" data-topic="事业财运" onclick="switchTopic(this)">事业财运</button>
+    <button class="topic-btn" data-topic="婚姻感情" onclick="switchTopic(this)">婚姻感情</button>
+    <button class="topic-btn" data-topic="健康运势" onclick="switchTopic(this)">健康运势</button>
+    <button class="topic-btn" data-topic="当前大运" onclick="switchTopic(this)">当前大运</button>
+  </div>
+  <div id="ai-area">
+    <div id="right-empty">
+      <div class="ei">✦</div>
+      <p>排盘后 AI 将自动解读命盘</p>
+    </div>
+  </div>
+  <div id="quick-qs" class="hidden">
+    <button class="qbtn" onclick="askQuick(this)">今年财运如何？</button>
+    <button class="qbtn" onclick="askQuick(this)">感情何时到来？</button>
+    <button class="qbtn" onclick="askQuick(this)">事业发展建议？</button>
+    <button class="qbtn" onclick="askQuick(this)">我的性格优劣势？</button>
+    <button class="qbtn" onclick="askQuick(this)">当前大运如何把握？</button>
+  </div>
+  <div id="input-box" class="hidden">
+    <textarea id="user-input" placeholder="继续提问，如：我的财运如何？婚姻几岁合适？" rows="1" onkeydown="handleKey(event)"></textarea>
+    <button id="send-btn" onclick="sendMessage()">发送</button>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// 常量
+// ================================================================
+const GAN  = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
+const ZHI  = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
+const MONTH_ZHI = ['寅','卯','辰','巳','午','未','申','酉','戌','亥','子','丑'];
+const YUE_GAN_START = {'甲':'丙','己':'丙','乙':'戊','庚':'戊','丙':'庚','辛':'庚','丁':'壬','壬':'壬','戊':'甲','癸':'甲'};
+const SHI_GAN_START = {'甲':'甲','己':'甲','乙':'丙','庚':'丙','丙':'戊','辛':'戊','丁':'庚','壬':'庚','戊':'壬','癸':'壬'};
+
+const GAN_WX = {'甲':'木','乙':'木','丙':'火','丁':'火','戊':'土','己':'土','庚':'金','辛':'金','壬':'水','癸':'水'};
+const ZHI_WX = {'子':'水','丑':'土','寅':'木','卯':'木','辰':'土','巳':'火','午':'火','未':'土','申':'金','酉':'金','戌':'土','亥':'水'};
+const GAN_YY = {'甲':'阳','乙':'阴','丙':'阳','丁':'阴','戊':'阳','己':'阴','庚':'阳','辛':'阴','壬':'阳','癸':'阴'};
+const WX_SHENG = {'木':'火','火':'土','土':'金','金':'水','水':'木'};
+const WX_KE   = {'木':'土','土':'水','水':'火','火':'金','金':'木'};
+const WX_COLOR = {'木':'#4daf48','火':'#e04848','土':'#c87c28','金':'#8898b8','水':'#3878d8'};
+const CANG_GAN = {
+  '子':['壬','癸'],'丑':['己','癸','辛'],'寅':['甲','丙','戊'],
+  '卯':['甲','乙'],'辰':['戊','乙','癸'],'巳':['丙','庚','戊'],
+  '午':['丙','己'],'未':['己','丁','乙'],'申':['庚','壬','戊'],
+  '酉':['庚','辛'],'戌':['戊','辛','丁'],'亥':['壬','甲']
+};
+const SS_COLOR = {
+  '比肩':'#c89838','劫财':'#a07028','食神':'#48a848','伤官':'#68c068',
+  '偏财':'#c87828','正财':'#e0a020','七杀':'#c83030','正官':'#d85050',
+  '偏印':'#3068c8','正印':'#4890e0'
+};
+
+// ================================================================
+// 算法
+// ================================================================
+function getJieDate(year, n) {
+  const baseDays = [35,66,96,127,157,188,219,252,281,311,341,6];
+  const jan1 = new Date(year, 0, 1);
+  return new Date(jan1.getTime() + (baseDays[n] - 1) * 86400000);
+}
+
+function paipan(birthDateStr, hour) {
+  const date = new Date(birthDateStr + 'T00:00:00');
+  const year = date.getFullYear();
+
+  // 年柱
+  const lichun = getJieDate(year, 0);
+  const realYear = (date < lichun) ? year - 1 : year;
+  const yearGanIdx = ((realYear - 4) % 10 + 10) % 10;
+  const yearZhiIdx = ((realYear - 4) % 12 + 12) % 12;
+  const yearGan = GAN[yearGanIdx];
+  const nianZhu = yearGan + ZHI[yearZhiIdx];
+
+  // 月柱 — 按日历顺序遍历：小寒(idx11,1月) → 立春(idx0) → … → 大雪(idx10)
+  const jieOrder = [11,0,1,2,3,4,5,6,7,8,9,10];
+  let yueZhiIdx = 10;
+  for (const i of jieOrder) {
+    if (date >= getJieDate(year, i)) yueZhiIdx = i;
+  }
+  const yueZhi = MONTH_ZHI[yueZhiIdx];
+  const realYearGan = GAN[((realYear - 4) % 10 + 10) % 10];
+  const yueStartGan = YUE_GAN_START[realYearGan];
+  const yueGan = GAN[(GAN.indexOf(yueStartGan) + yueZhiIdx) % 10];
+  const yueZhu = yueGan + yueZhi;
+
+  // 日柱
+  const diffDays = Math.round((date - new Date(2000, 0, 1)) / 86400000);
+  const riIdx = ((7 + diffDays) % 60 + 60) % 60;
+  const riGan = GAN[riIdx % 10];
+  const riZhi = ZHI[riIdx % 12];
+  const riZhu = riGan + riZhi;
+
+  // 时柱
+  const h = parseInt(hour);
+  const shiZhiIdx = Math.floor(((h + 1) % 24) / 2);
+  const shiZhi = ZHI[shiZhiIdx];
+  const shiGan = GAN[(GAN.indexOf(SHI_GAN_START[riGan]) + shiZhiIdx) % 10];
+  const shiZhu = shiGan + shiZhi;
+
+  return { nianZhu, yueZhu, riZhu, shiZhu, riGan, yearGan, realYear };
+}
+
+function getDaYun(birthDateStr, gender, yearGan, yueZhu) {
+  const date = new Date(birthDateStr + 'T00:00:00');
+  const year = date.getFullYear();
+  const isYang = GAN.indexOf(yearGan) % 2 === 0;
+  const shun = (gender === 'male' && isYang) || (gender === 'female' && !isYang);
+
+  const chronOrder = [11,0,1,2,3,4,5,6,7,8,9,10];
+  let jieDate = null;
+  if (shun) {
+    for (const i of chronOrder) {
+      const jd = getJieDate(year, i);
+      if (jd > date) { jieDate = jd; break; }
+    }
+    if (!jieDate) jieDate = getJieDate(year + 1, 11);
+  } else {
+    for (const i of [10,9,8,7,6,5,4,3,2,1,0,11]) {
+      const jd = getJieDate(year, i);
+      if (jd <= date) { jieDate = jd; break; }
+    }
+    if (!jieDate) jieDate = getJieDate(year - 1, 10);
+  }
+
+  const diffDays = Math.abs((date - jieDate) / 86400000);
+  const qiYunAge = Math.floor(diffDays / 3);
+  const yueGanIdx = GAN.indexOf(yueZhu[0]);
+  const yueZhiIdx = ZHI.indexOf(yueZhu[1]);
+  const list = [];
+  for (let i = 0; i < 8; i++) {
+    const gIdx = shun ? (yueGanIdx + i + 1) % 10 : (yueGanIdx - i - 1 + 10) % 10;
+    const zIdx = shun ? (yueZhiIdx + i + 1) % 12 : (yueZhiIdx - i - 1 + 12) % 12;
+    list.push({ age: qiYunAge + i * 10, gz: GAN[gIdx] + ZHI[zIdx] });
+  }
+  return { qiYunAge, shun, list };
+}
+
+function getShiShen(riGan, g) {
+  if (!g || g === riGan) return '';
+  const rw = GAN_WX[riGan], tw = GAN_WX[g];
+  const sy = GAN_YY[riGan] === GAN_YY[g];
+  if (rw === tw) return sy ? '比肩' : '劫财';
+  if (WX_SHENG[rw] === tw) return sy ? '食神' : '伤官';
+  if (WX_KE[rw]    === tw) return sy ? '偏财' : '正财';
+  if (WX_KE[tw]    === rw) return sy ? '七杀' : '正官';
+  if (WX_SHENG[tw] === rw) return sy ? '偏印' : '正印';
+  return '';
+}
+
+// ================================================================
+// 命盘渲染
+// ================================================================
+function renderMingpan(bazi, daYun, input) {
+  const genderText = input.gender === 'male' ? '男命' : '女命';
+  const placeText  = input.birthPlace ? ' · ' + input.birthPlace : '';
+  document.getElementById('mp-title').textContent =
+    `${bazi.nianZhu} · ${bazi.yueZhu} · ${bazi.riZhu} · ${bazi.shiZhu}`;
+  document.getElementById('mp-meta').textContent =
+    `${input.birthDate} ${input.birthTime} · ${genderText}${placeText}`;
+
+  document.getElementById('sizhu-grid').innerHTML = buildSizhu(bazi);
+  document.getElementById('wuxing-bar').innerHTML = buildWuxing(bazi);
+  document.getElementById('dayun-area').innerHTML = buildDaYun(daYun, new Date(input.birthDate).getFullYear());
+
+  document.getElementById('mingpan').classList.remove('hidden');
+  document.getElementById('left-empty').classList.add('hidden');
+}
+
+function buildSizhu(bazi) {
+  const pillars = [
+    { label:'年柱', gz: bazi.nianZhu },
+    { label:'月柱', gz: bazi.yueZhu },
+    { label:'日柱', gz: bazi.riZhu, dm: true },
+    { label:'时柱', gz: bazi.shiZhu },
+  ];
+  return pillars.map(p => {
+    const gan = p.gz[0], zhi = p.gz[1];
+    const ganWx = GAN_WX[gan], zhiWx = ZHI_WX[zhi];
+    const ganC  = WX_COLOR[ganWx], zhiC = WX_COLOR[zhiWx];
+    const cg    = CANG_GAN[zhi] || [];
+    const ssTian = p.dm ? '日主' : (getShiShen(bazi.riGan, gan) || '');
+    const ssDi   = p.dm ? '' : (getShiShen(bazi.riGan, cg[0]) || '');
+    const ssTianC = p.dm ? 'var(--gold)' : (SS_COLOR[ssTian] || 'var(--text2)');
+    const ssDiC   = SS_COLOR[ssDi] || 'var(--text2)';
+    const cgHTML  = cg.map(g =>
+      `<span class="cg" style="color:${WX_COLOR[GAN_WX[g]]}">${g}</span>`).join('');
+    return `
+      <div class="pillar${p.dm?' dm':''}">
+        <div class="p-col-label">${p.label}</div>
+        <div class="p-sstian" style="color:${ssTianC}">${ssTian}</div>
+        <div class="p-gan" style="color:${ganC}">${gan}</div>
+        <div class="p-wxbadge" style="color:${ganC}">${ganWx}·${GAN_YY[gan]}</div>
+        <div class="p-sep"></div>
+        <div class="p-canggan">${cgHTML}</div>
+        <div class="p-zhi" style="color:${zhiC}">${zhi}</div>
+        <div class="p-wxbadge" style="color:${zhiC}">${zhiWx}</div>
+        <div class="p-ssdi" style="color:${ssDiC}">${ssDi}</div>
+      </div>`;
+  }).join('');
+}
+
+function buildWuxing(bazi) {
+  const cnt = {木:0,火:0,土:0,金:0,水:0};
+  [bazi.nianZhu,bazi.yueZhu,bazi.riZhu,bazi.shiZhu].forEach(gz => {
+    cnt[GAN_WX[gz[0]]]++;
+    cnt[ZHI_WX[gz[1]]]++;
+  });
+  const total = 8;
+  const items = ['木','火','土','金','水'].map(wx => `
+    <div class="wx-item">
+      <div class="wx-name" style="color:${WX_COLOR[wx]}">${wx}</div>
+      <div class="wx-num">${cnt[wx]}</div>
+      <div class="wx-track"><div class="wx-fill" style="width:${cnt[wx]/total*100}%;background:${WX_COLOR[wx]}"></div></div>
+    </div>`).join('');
+  return `<div class="wx-row">${items}</div>`;
+}
+
+function buildDaYun(daYun, birthYear) {
+  const cards = daYun.list.map(d => {
+    const sy = birthYear + d.age;
+    const gc = WX_COLOR[GAN_WX[d.gz[0]]];
+    const zc = WX_COLOR[ZHI_WX[d.gz[1]]];
+    return `
+      <div class="dy-card">
+        <div class="dy-gz"><span style="color:${gc}">${d.gz[0]}</span><span style="color:${zc}">${d.gz[1]}</span></div>
+        <div class="dy-age">${d.age}岁起</div>
+        <div class="dy-year">${sy}—${sy+9}</div>
+      </div>`;
+  }).join('');
+  return `
+    <div class="dy-head">大 运 · ${daYun.qiYunAge}岁起运（${daYun.shun?'顺':'逆'}行）</div>
+    <div class="dy-scroll">${cards}</div>`;
+}
+
+// ================================================================
+// AI context builder
+// ================================================================
+function buildContext(bazi, daYun, input) {
+  const pillars = [
+    {name:'年', gz:bazi.nianZhu},
+    {name:'月', gz:bazi.yueZhu},
+    {name:'日', gz:bazi.riZhu, dm:true},
+    {name:'时', gz:bazi.shiZhu}
+  ];
+  const cnt = {木:0,火:0,土:0,金:0,水:0};
+  pillars.forEach(p=>{cnt[GAN_WX[p.gz[0]]]++;cnt[ZHI_WX[p.gz[1]]]++;});
+  const wxStr = ['木','火','土','金','水'].map(w=>`${w}${cnt[w]}`).join('、');
+  const dyStr = daYun.list.map(d=>`${d.gz}(${d.age}岁)`).join('、');
+  const genderText = input.gender==='male'?'男':'女';
+  const cangStr = pillars.map(p=>{
+    const cg=(CANG_GAN[p.gz[1]]||[]).join('');
+    return `${p.gz[1]}藏${cg}`;
+  }).join('，');
+  return `当事人：公历${input.birthDate} ${input.birthTime}，${genderText}命${input.birthPlace?'，出生于'+input.birthPlace:''}。
+四柱：年${bazi.nianZhu}（${getShiShen(bazi.riGan,bazi.nianZhu[0])||'—'}），月${bazi.yueZhu}（${getShiShen(bazi.riGan,bazi.yueZhu[0])||'—'}），日${bazi.riZhu}（日主 ${bazi.riGan}，${GAN_WX[bazi.riGan]}${GAN_YY[bazi.riGan]}），时${bazi.shiZhu}（${getShiShen(bazi.riGan,bazi.shiZhu[0])||'—'}）。
+藏干：${cangStr}。五行统计：${wxStr}。
+大运${daYun.qiYunAge}岁起（${daYun.shun?'顺':'逆'}行）：${dyStr}。`;
+}
+
+const TOPIC_PROMPT = {
+  '命格总论': '请对此八字进行全面命格解读，包括日主强弱、五行格局特点、命格定性、核心性格特征，以及人生总体走向。请使用【标题】格式组织内容，语言专业而流畅。',
+  '事业财运': '请重点分析此八字的事业与财运：适合的职业方向、事业发展节奏、财运特点与财富积累方式、当前阶段事业建议。',
+  '婚姻感情': '请重点分析此八字的婚姻与感情：感情观与性格特质、姻缘时机、伴侣特征、婚后相处模式及注意事项。',
+  '健康运势': '请重点分析此八字的健康面：体质特点、五行缺失带来的健康隐患、需要注意的身体部位，以及养生建议。',
+  '当前大运': '请结合当前时间（2026年），分析此八字正在行走的大运状态，对近1-3年的运势作出具体分析与实用建议。',
+};
+
+// ================================================================
+// State
+// ================================================================
+let currentTaskId = null;
+let isWaiting = false;
+let currentTopic = '命格总论';
+let baziCtx = null; // 命盘上下文字符串
+
+// ================================================================
+// UI helpers
+// ================================================================
+function setWaiting(v) {
+  isWaiting = v;
+  document.getElementById('paipan-btn').disabled = v;
+  document.getElementById('send-btn').disabled = v;
+}
+
+function showThinking() {
+  const area = document.getElementById('ai-area');
+  const d = document.createElement('div');
+  d.id = 'thinking';
+  d.className = 'thinking';
+  d.innerHTML = `<div class="dots"><span></span><span></span><span></span></div><span>AI 解读中…</span>`;
+  area.appendChild(d);
+  area.scrollTop = area.scrollHeight;
+}
+
+function hideThinking() {
+  document.getElementById('thinking')?.remove();
+}
+
+function appendMsg(role, content) {
+  const area = document.getElementById('ai-area');
+  const wrap = document.createElement('div');
+  wrap.className = `msg ${role}`;
+  const label = role === 'user' ? '你' : 'AI 命理师';
+  const body = role === 'assistant' ? marked.parse(content) : escHtml(content);
+  wrap.innerHTML = `<div class="rlabel">${label}</div><div class="bubble">${body}</div>`;
+  area.appendChild(wrap);
+  area.scrollTop = area.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function clearAiArea() {
+  const area = document.getElementById('ai-area');
+  area.innerHTML = '';
+}
+
+// ================================================================
+// Main actions
+// ================================================================
+async function doPaiPan() {
+  if (isWaiting) return;
+  const birthDate  = document.getElementById('birthDate').value;
+  const birthTime  = document.getElementById('birthTime').value;
+  const gender     = document.getElementById('gender').value;
+  const birthPlace = document.getElementById('birthPlace').value.trim();
+  if (!birthDate || !birthTime) { alert('请填写出生日期和时间'); return; }
+
+  const hour = parseInt(birthTime.split(':')[0]);
+  const bazi = paipan(birthDate, hour);
+  const daYun = getDaYun(birthDate, gender, bazi.yearGan, bazi.yueZhu);
+  const input = { birthDate, birthTime, gender, birthPlace };
+
+  renderMingpan(bazi, daYun, input);
+  baziCtx = buildContext(bazi, daYun, input);
+
+  // Reset right panel
+  clearAiArea();
+  currentTaskId = null;
+  currentTopic = '命格总论';
+  document.querySelectorAll('.topic-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.topic === '命格总论');
+  });
+  document.getElementById('topic-bar').classList.remove('hidden');
+
+  // Build initial messages
+  const systemPrompt = `你是一位资深八字命理师，精通阴阳五行、十神六亲，善于从命盘中洞察人生规律。解读时专业深入、语言流畅，善用【标题】格式组织内容，避免过于玄虚，注重实用价值。`;
+  const userPrompt = `以下是当事人的命盘信息，请进行解读：\n\n${baziCtx}\n\n${TOPIC_PROMPT['命格总论']}`;
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ];
+
+  setWaiting(true);
+  showThinking();
+  try {
+    const resp = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input, bazi_result: { bazi, daYun }, messages })
+    });
+    const data = await resp.json();
+    hideThinking();
+    currentTaskId = data.id;
+    const lastMsg = data.messages[data.messages.length - 1];
+    appendMsg('assistant', lastMsg.content);
+    document.getElementById('input-box').classList.remove('hidden');
+    document.getElementById('quick-qs').classList.remove('hidden');
+    loadTaskList();
+  } catch(e) {
+    hideThinking();
+    appendMsg('assistant', '请求失败：' + e.message);
+  } finally {
+    setWaiting(false);
+  }
+}
+
+async function switchTopic(btn) {
+  if (isWaiting || !currentTaskId) return;
+  const topic = btn.dataset.topic;
+  if (topic === currentTopic) return;
+  currentTopic = topic;
+  document.querySelectorAll('.topic-btn').forEach(b => b.classList.toggle('active', b === btn));
+
+  if (!TOPIC_PROMPT[topic]) return;
+  const userMsg = `${baziCtx}\n\n${TOPIC_PROMPT[topic]}`;
+  appendMsg('user', `【${topic}】分析`);
+  setWaiting(true);
+  showThinking();
+  try {
+    const resp = await fetch(`/api/tasks/${currentTaskId}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userMessage: userMsg })
+    });
+    const data = await resp.json();
+    hideThinking();
+    appendMsg('assistant', data.reply);
+  } catch(e) {
+    hideThinking();
+    appendMsg('assistant', '请求失败：' + e.message);
+  } finally {
+    setWaiting(false);
+  }
+}
+
+async function askQuick(btn) {
+  if (isWaiting || !currentTaskId) return;
+  document.getElementById('user-input').value = btn.textContent;
+  await sendMessage();
+}
+
+async function sendMessage() {
+  if (isWaiting || !currentTaskId) return;
+  const inp = document.getElementById('user-input');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  inp.style.height = 'auto';
+  appendMsg('user', text);
+  setWaiting(true);
+  showThinking();
+  try {
+    const resp = await fetch(`/api/tasks/${currentTaskId}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userMessage: text })
+    });
+    const data = await resp.json();
+    hideThinking();
+    appendMsg('assistant', data.reply);
+  } catch(e) {
+    hideThinking();
+    appendMsg('assistant', '请求失败：' + e.message);
+  } finally {
+    setWaiting(false);
+  }
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  const ta = e.target;
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+}
+
+// ================================================================
+// History
+// ================================================================
+async function loadTaskList() {
+  const resp = await fetch('/api/tasks');
+  const tasks = await resp.json();
+  document.getElementById('task-list').innerHTML = tasks.map(t => {
+    const inp = typeof t.input === 'string' ? JSON.parse(t.input) : t.input;
+    const d = new Date(t.created_at);
+    const time = d.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const name = `${inp.birthDate} ${inp.gender==='male'?'男':'女'}`;
+    return `<div class="task-item${t.id===currentTaskId?' active':''}" onclick="loadTask(${t.id})">
+      <div class="ti-name">${name}</div>
+      <div class="ti-time">${time}</div>
+    </div>`;
+  }).join('');
+}
+
+async function loadTask(id) {
+  const resp = await fetch(`/api/tasks/${id}`);
+  const task = await resp.json();
+  currentTaskId = id;
+  const { bazi, daYun } = task.bazi_result;
+  renderMingpan(bazi, daYun, task.input);
+  baziCtx = buildContext(bazi, daYun, task.input);
+  clearAiArea();
+  const convMsgs = task.messages.filter(m => m.role !== 'system').slice(1);
+  convMsgs.forEach(m => appendMsg(m.role, m.content));
+  document.getElementById('topic-bar').classList.remove('hidden');
+  document.getElementById('input-box').classList.remove('hidden');
+  document.getElementById('quick-qs').classList.remove('hidden');
+  loadTaskList();
+}
+
+function showNewForm() {
+  currentTaskId = null;
+  baziCtx = null;
+  document.getElementById('mingpan').classList.add('hidden');
+  document.getElementById('left-empty').classList.remove('hidden');
+  clearAiArea();
+  document.getElementById('ai-area').innerHTML = `
+    <div id="right-empty"><div class="ei">✦</div><p>排盘后 AI 将自动解读命盘</p></div>`;
+  document.getElementById('topic-bar').classList.add('hidden');
+  document.getElementById('input-box').classList.add('hidden');
+  document.getElementById('quick-qs').classList.add('hidden');
+  loadTaskList();
+}
+
+loadTaskList();
+</script>
+</body>
+</html>
