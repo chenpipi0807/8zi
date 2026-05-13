@@ -2,6 +2,9 @@
 
 基于八字排盘算法 + DeepSeek 大模型的命理解读应用，支持局域网共享，所有记录持久化存储。
 
+<img width="2634" height="1392" alt="ScreenShot_2026-05-13_212537_528" src="https://github.com/user-attachments/assets/80200ac4-a676-4b39-afab-9734b2ac3c23" />
+
+
 ## 功能特点
 
 - **八字排盘**：自动计算年柱、月柱、日柱、时柱，含十神、藏干、五行配色
