@@ -297,7 +297,7 @@ function paipan(birthDateStr, hour) {
 
   // 日柱
   const diffDays = Math.round((date - new Date(2000, 0, 1)) / 86400000);
-  const riIdx = ((7 + diffDays) % 60 + 60) % 60;
+  const riIdx = ((54 + diffDays) % 60 + 60) % 60;
   const riGan = GAN[riIdx % 10];
   const riZhi = ZHI[riIdx % 12];
   const riZhu = riGan + riZhi;
@@ -483,6 +483,7 @@ const TOPIC_PROMPT = {
 let currentTaskId = null;
 let isWaiting = false;
 let currentTopic = '命格总论';
+let currentTopics = null; // { topic: messages[] }，新排盘缓存
 let baziCtx = null; // 命盘上下文字符串
 
 // ================================================================
@@ -556,13 +557,7 @@ async function doPaiPan() {
   });
   document.getElementById('topic-bar').classList.remove('hidden');
 
-  // Build initial messages
   const systemPrompt = `你是一位资深八字命理师，精通阴阳五行、十神六亲，善于从命盘中洞察人生规律。解读时专业深入、语言流畅，善用【标题】格式组织内容，避免过于玄虚，注重实用价值。`;
-  const userPrompt = `以下是当事人的命盘信息，请进行解读：\n\n${baziCtx}\n\n${TOPIC_PROMPT['命格总论']}`;
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt }
-  ];
 
   setWaiting(true);
   showThinking();
@@ -570,13 +565,19 @@ async function doPaiPan() {
     const resp = await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input, bazi_result: { bazi, daYun }, messages })
+      body: JSON.stringify({
+        input,
+        bazi_result: { bazi, daYun },
+        baziCtx,
+        systemPrompt,
+        topicPrompts: TOPIC_PROMPT
+      })
     });
     const data = await resp.json();
     hideThinking();
     currentTaskId = data.id;
-    const lastMsg = data.messages[data.messages.length - 1];
-    appendMsg('assistant', lastMsg.content);
+    currentTopics = data.topics;
+    renderTopicMessages('命格总论');
     document.getElementById('input-box').classList.remove('hidden');
     document.getElementById('quick-qs').classList.remove('hidden');
     loadTaskList();
@@ -588,6 +589,18 @@ async function doPaiPan() {
   }
 }
 
+function renderTopicMessages(topic) {
+  clearAiArea();
+  const msgs = currentTopics[topic];
+  let isFirst = true;
+  for (const m of msgs) {
+    if (m.role === 'system') continue;
+    if (m.role === 'user' && isFirst) { isFirst = false; continue; } // 跳过完整命盘提示词
+    isFirst = false;
+    appendMsg(m.role, m.content);
+  }
+}
+
 async function switchTopic(btn) {
   if (isWaiting || !currentTaskId) return;
   const topic = btn.dataset.topic;
@@ -595,8 +608,14 @@ async function switchTopic(btn) {
   currentTopic = topic;
   document.querySelectorAll('.topic-btn').forEach(b => b.classList.toggle('active', b === btn));
 
+  // 新格式：直接读缓存，无需请求
+  if (currentTopics && currentTopics[topic]) {
+    renderTopicMessages(topic);
+    return;
+  }
+
+  // 旧格式历史记录：按需请求
   if (!TOPIC_PROMPT[topic]) return;
-  const userMsg = `${baziCtx}\n\n${TOPIC_PROMPT[topic]}`;
   appendMsg('user', `【${topic}】分析`);
   setWaiting(true);
   showThinking();
@@ -604,7 +623,7 @@ async function switchTopic(btn) {
     const resp = await fetch(`/api/tasks/${currentTaskId}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userMessage: userMsg })
+      body: JSON.stringify({ userMessage: TOPIC_PROMPT[topic] })
     });
     const data = await resp.json();
     hideThinking();
@@ -634,14 +653,22 @@ async function sendMessage() {
   setWaiting(true);
   showThinking();
   try {
+    const body = currentTopics
+      ? { topic: currentTopic, userMessage: text }
+      : { userMessage: text };
     const resp = await fetch(`/api/tasks/${currentTaskId}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userMessage: text })
+      body: JSON.stringify(body)
     });
     const data = await resp.json();
     hideThinking();
     appendMsg('assistant', data.reply);
+    // 更新本地缓存，切回此话题时能看到完整对话
+    if (currentTopics && currentTopics[currentTopic]) {
+      currentTopics[currentTopic].push({ role: 'user', content: text });
+      currentTopics[currentTopic].push({ role: 'assistant', content: data.reply });
+    }
   } catch(e) {
     hideThinking();
     appendMsg('assistant', '请求失败：' + e.message);
@@ -683,8 +710,20 @@ async function loadTask(id) {
   renderMingpan(bazi, daYun, task.input);
   baziCtx = buildContext(bazi, daYun, task.input);
   clearAiArea();
-  const convMsgs = task.messages.filter(m => m.role !== 'system').slice(1);
-  convMsgs.forEach(m => appendMsg(m.role, m.content));
+  if (task.topics) {
+    // 新格式：按话题分组
+    currentTopics = task.topics;
+    currentTopic = '命格总论';
+    document.querySelectorAll('.topic-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.topic === '命格总论');
+    });
+    renderTopicMessages('命格总论');
+  } else {
+    // 旧格式历史记录：单条消息流
+    currentTopics = null;
+    const convMsgs = task.messages.filter(m => m.role !== 'system').slice(1);
+    convMsgs.forEach(m => appendMsg(m.role, m.content));
+  }
   document.getElementById('topic-bar').classList.remove('hidden');
   document.getElementById('input-box').classList.remove('hidden');
   document.getElementById('quick-qs').classList.remove('hidden');
@@ -693,6 +732,7 @@ async function loadTask(id) {
 
 function showNewForm() {
   currentTaskId = null;
+  currentTopics = null;
   baziCtx = null;
   document.getElementById('mingpan').classList.add('hidden');
   document.getElementById('left-empty').classList.remove('hidden');

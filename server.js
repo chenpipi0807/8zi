@@ -36,11 +36,24 @@ app.get('/api/tasks/:id', (req, res) => {
   res.json(task);
 });
 
-// --- Create new task (排盘 + first AI call) ---
+// --- Create new task (排盘 + 5 parallel topic analyses) ---
 app.post('/api/tasks', async (req, res) => {
-  const { input, bazi_result, messages } = req.body;
-  const aiResponse = await callDeepSeek(messages);
-  const fullMessages = [...messages, { role: 'assistant', content: aiResponse }];
+  const { input, bazi_result, baziCtx, systemPrompt, topicPrompts } = req.body;
+
+  const TOPICS = ['命格总论', '事业财运', '婚姻感情', '健康运势', '当前大运'];
+
+  // Concurrent API calls for all 5 topics
+  const topicResults = await Promise.all(TOPICS.map(async (topic) => {
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `以下是当事人的命盘信息，请进行解读：\n\n${baziCtx}\n\n${topicPrompts[topic]}` }
+    ];
+    const response = await callDeepSeek(messages);
+    return { topic, messages: [...messages, { role: 'assistant', content: response }] };
+  }));
+
+  const topics = {};
+  topicResults.forEach(r => { topics[r.topic] = r.messages; });
 
   const db = readDB();
   const task = {
@@ -48,27 +61,46 @@ app.post('/api/tasks', async (req, res) => {
     created_at: new Date().toISOString(),
     input,
     bazi_result,
-    messages: fullMessages
+    topics
   };
   db.tasks.push(task);
   writeDB(db);
 
-  res.json({ id: task.id, messages: fullMessages });
+  res.json({ id: task.id, topics });
 });
 
 // --- Continue conversation ---
 app.post('/api/tasks/:id/chat', async (req, res) => {
-  const { userMessage } = req.body;
-  const db = readDB();
-  const task = db.tasks.find(t => t.id === parseInt(req.params.id));
+  const { userMessage, topic } = req.body;
+  const id = parseInt(req.params.id);
+
+  let db = readDB();
+  let task = db.tasks.find(t => t.id === id);
   if (!task) return res.status(404).json({ error: 'not found' });
 
-  task.messages.push({ role: 'user', content: userMessage });
-  const aiResponse = await callDeepSeek(task.messages);
-  task.messages.push({ role: 'assistant', content: aiResponse });
+  // New format: topic-specific threads; old format: single messages array
+  const useTopics = task.topics && topic;
+  const contextMessages = useTopics ? task.topics[topic] : task.messages;
+  if (!contextMessages) return res.status(400).json({ error: 'invalid topic' });
+
+  const apiMessages = [...contextMessages, { role: 'user', content: userMessage }];
+  const aiResponse = await callDeepSeek(apiMessages);
+
+  // Re-read fresh db after API returns to avoid overwriting concurrent writes
+  db = readDB();
+  task = db.tasks.find(t => t.id === id);
+  if (!task) return res.status(404).json({ error: 'not found' });
+
+  if (useTopics) {
+    task.topics[topic].push({ role: 'user', content: userMessage });
+    task.topics[topic].push({ role: 'assistant', content: aiResponse });
+  } else {
+    task.messages.push({ role: 'user', content: userMessage });
+    task.messages.push({ role: 'assistant', content: aiResponse });
+  }
   writeDB(db);
 
-  res.json({ reply: aiResponse, messages: task.messages });
+  res.json({ reply: aiResponse });
 });
 
 async function callDeepSeek(messages) {
@@ -83,7 +115,8 @@ async function callDeepSeek(messages) {
         model: 'deepseek-v4-flash',
         messages,
         temperature: 0.8,
-        max_tokens: 4000
+        max_tokens: 4000,
+        thinking: { type: 'disabled' }
       })
     });
     const json = await resp.json();
